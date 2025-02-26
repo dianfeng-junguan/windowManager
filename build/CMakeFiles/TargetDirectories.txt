@@ -1,0 +1,3 @@
+D:/Code/Comprehensive/OS_mods/wndman/build/CMakeFiles/wndman.dir
+D:/Code/Comprehensive/OS_mods/wndman/build/CMakeFiles/edit_cache.dir
+D:/Code/Comprehensive/OS_mods/wndman/build/CMakeFiles/rebuild_cache.dir

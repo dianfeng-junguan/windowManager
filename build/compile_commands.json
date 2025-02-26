@@ -1,0 +1,8 @@
+[
+{
+  "directory": "D:/Code/Comprehensive/OS_mods/wndman/build",
+  "command": "E:\\Mingw\\bin\\gcc.exe -DDEBUG @CMakeFiles/wndman.dir/includes_C.rsp  -o CMakeFiles\\wndman.dir\\src\\wndman.c.obj -c D:\\Code\\Comprehensive\\OS_mods\\wndman\\src\\wndman.c",
+  "file": "D:/Code/Comprehensive/OS_mods/wndman/src/wndman.c",
+  "output": "CMakeFiles/wndman.dir/src/wndman.c.obj"
+}
+]

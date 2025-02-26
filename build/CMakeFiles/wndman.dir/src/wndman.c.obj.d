@@ -1,0 +1,24 @@
+CMakeFiles/wndman.dir/src/wndman.c.obj: \
+ D:\Code\Comprehensive\OS_mods\wndman\src\wndman.c \
+ D:/Code/Comprehensive/OS_mods/wndman/include/wndman.h \
+ E:/Mingw/x86_64-w64-mingw32/include/stdio.h \
+ E:/Mingw/x86_64-w64-mingw32/include/crtdefs.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw_mac.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw_secapi.h \
+ E:/Mingw/x86_64-w64-mingw32/include/vadefs.h \
+ E:/Mingw/x86_64-w64-mingw32/include/sdks/_mingw_directx.h \
+ E:/Mingw/x86_64-w64-mingw32/include/sdks/_mingw_ddk.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw_print_push.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw_off_t.h \
+ E:/Mingw/x86_64-w64-mingw32/include/swprintf.inl \
+ E:/Mingw/x86_64-w64-mingw32/include/sec_api/stdio_s.h \
+ E:/Mingw/x86_64-w64-mingw32/include/_mingw_print_pop.h \
+ E:/Mingw/x86_64-w64-mingw32/include/stdlib.h \
+ E:/Mingw/lib/gcc/x86_64-w64-mingw32/8.1.0/include-fixed/limits.h \
+ E:/Mingw/lib/gcc/x86_64-w64-mingw32/8.1.0/include-fixed/syslimits.h \
+ E:/Mingw/x86_64-w64-mingw32/include/limits.h \
+ E:/Mingw/x86_64-w64-mingw32/include/sec_api/stdlib_s.h \
+ E:/Mingw/x86_64-w64-mingw32/include/malloc.h \
+ E:/Mingw/x86_64-w64-mingw32/include/string.h \
+ E:/Mingw/x86_64-w64-mingw32/include/sec_api/string_s.h

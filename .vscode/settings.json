@@ -1,0 +1,6 @@
+{
+    "clang-tidy.compilerArgs": [
+        "-DDEBUG",
+        "-Iinclude"
+    ]
+}

@@ -4,38 +4,69 @@
 #include <stdlib.h>
 #include <string.h>
 #define KMALLOC(size) malloc(size)
+#define KFREE(ptr) free(ptr)
 #else
 #define KMALLOC(size) kmalloc(size, NO_ALIGN)
+#define KFREE(ptr) kfree(ptr)
 #endif
+static int listener_id_gen = 0;
+#define LISTENER_ID (listener_id_gen++)
+window_t* g_wnd_layer_ordered[MAX_WINDOWS] = { 0 };
 window_t* g_windows;
+window_event_listener_t* g_event_listeners = NULL;
+window_event_t* g_event_queue = NULL;
+window_event_handler_t g_default_event_handlers[WNDEVENT_COUNT] = {
+    [WND_EVENT_MOUSE_MOVE] = default_mouse_move_event_handler,
+    [WND_EVENT_MOUSE_DOWN] = default_mouse_down_event_handler,
+    [WND_EVENT_MOUSE_UP] = default_mouse_up_event_handler,
+    [WND_EVENT_MOUSE_DOUBLE_CLICK] = default_mouse_double_click_event_handler,
+    [WND_EVENT_MOUSE_WHEEL] = default_mouse_wheel_event_handler,
+    [WND_EVENT_KEY_DOWN] = default_key_down_event_handler,
+    [WND_EVENT_KEY_UP] = default_key_up_event_handler,
+    [WND_EVENT_KEY_PRESS] = default_key_press_event_handler,
+    [WND_EVENT_WINDOW_RESIZE] = default_window_resize_event_handler,
+    [WND_EVENT_WINDOW_MOVE] = default_window_move_event_handler,
+    [WND_EVENT_WINDOW_CLOSE] = default_window_close_event_handler,
+    [WND_EVENT_WINDOW_FOCUS] = default_window_focus_event_handler,
+    [WND_EVENT_WINDOW_LOST_FOCUS] = default_window_lost_focus_event_handler,
+};
+void default_mouse_move_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_mouse_down_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_mouse_up_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_mouse_double_click_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_mouse_wheel_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_key_down_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_key_up_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_key_press_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_window_resize_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_window_move_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_window_close_event_handler(int wnd_id, int event_type, window_event_t* event)
+{
+    destroy_window(wnd_id);
+}
+void default_window_focus_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_window_lost_focus_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_timer_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 int init_wndman()
 {
-    g_windows = (window_t*)KMALLOC(sizeof(window_t) * MAX_WINDOWS);
+    g_windows = (int)KMALLOC(sizeof(window_t) * MAX_WINDOWS);
     if (g_windows == NULL) {
         return -1;
     }
     for (int i = 0; i < MAX_WINDOWS; i++) {
         g_windows[i].state = 0;
     }
+    //TODO 向时钟中断注册处理消息的函数
+
     return 0;
 }
-/**
-    @brief 创建窗口
-    @param wnd 要创建的窗口
-    @param title 窗口标题
-    @param wnd_type 窗口类型
-    @return 0 成功，-1 失败
-*/
-int create_window(window_t** wnd, char* title, int wnd_type)
+
+int create_window(char* title, int wnd_type)
 {
-    if (wnd == NULL || title == NULL) {
-        return -1;
-    }
     for (int i = 0; i < MAX_WINDOWS; i++) {
         if (!(g_windows[i].state & WNDSTATE_PRESENT) && !(g_windows[i].state & WNDSTATE_DESTROYED)) {
             // 初始化窗口的基本信息
-            *wnd = g_windows + i;
-            window_t* wndp = *wnd;
+            window_t* wndp = g_windows + i;
             wndp->state = WNDSTATE_PRESENT;
             wndp->x = 0;
             wndp->y = 0;
@@ -49,6 +80,7 @@ int create_window(window_t** wnd, char* title, int wnd_type)
             // 复制窗口标题
             strncpy(wndp->title, title, sizeof(wndp->title) - 1);
             wndp->title[sizeof(wndp->title) - 1] = '\0';
+            memcpy(wndp->event_handlers, g_default_event_handlers, sizeof(g_default_event_handlers));
             return i;
         }
     }
@@ -57,18 +89,15 @@ int create_window(window_t** wnd, char* title, int wnd_type)
 
 /**
     @brief 销毁窗口
-    @param wnd 要销毁的窗口
+    @param wnd_id 要销毁的窗口
     @return 0 成功，-1 失败
 */
-int destroy_window(window_t** wnd)
+int destroy_window(int wnd_id)
 {
-    if (wnd == NULL || *wnd == NULL) {
+    if (wnd_id < 0 || wnd_id >= MAX_WINDOWS) {
         return -1;
     }
-    window_t* wndp = *wnd;
-    if (wndp - g_windows < 0 || wndp - g_windows >= MAX_WINDOWS) {
-        return -1;
-    }
+    window_t* wndp = g_windows + wnd_id;
     wndp->state |= WNDSTATE_DESTROYED;
     // 这里可以添加释放窗口相关资源的代码
     // 例如，如果有动态分配的内存，需要在这里释放
@@ -78,15 +107,17 @@ int destroy_window(window_t** wnd)
 
 /**
     @brief 将窗口附加到父窗口上
-    @param wnd 要附加的窗口
+    @param wnd_id 要附加的窗口
     @param parent 父窗口
     @return 0 成功，-1 失败
 */
-int attach_window(window_t* wnd, window_t* parent)
+int attach_window(int wnd_id, int parent_id)
 {
-    if (wnd == NULL || parent == NULL) {
+    if (wnd_id < 0 || wnd_id >= MAX_WINDOWS || parent_id < 0 || parent_id >= MAX_WINDOWS) {
         return -1;
     }
+    window_t* parent = g_windows + parent_id;
+    window_t* wnd = g_windows + wnd_id;
     if (!parent->children) {
         parent->children = wnd;
     }
@@ -105,14 +136,15 @@ int attach_window(window_t* wnd, window_t* parent)
 
 /**
     @brief 将窗口从父窗口上分离
-    @param wnd 要分离的窗口
+    @param wnd_id 要分离的窗口
     @return 0 成功，-1 失败
 */
-int detach_window(window_t* wnd)
+int detach_window(int wnd_id)
 {
-    if (wnd == NULL) {
+    if (wnd_id < 0 || wnd_id >= MAX_WINDOWS) {
         return -1;
     }
+    window_t* wnd = g_windows + wnd_id;
     wnd->parent = NULL;
     if (wnd->prev_as_child)
         wnd->prev_as_child->next_as_child = wnd->next_as_child;
@@ -126,19 +158,15 @@ int detach_window(window_t* wnd)
 /**
     @brief 根据标题获取窗口
     @param title 窗口标题
-    @param wnd 用于存储找到的窗口
+    @param wnd_id 用于存储找到的窗口
     @return 0 成功，-1 失败
 */
-int get_window_by_title(char* title, window_t** wnd)
+int get_window_by_title(char* title)
 {
-    if (title == NULL || wnd == NULL) {
-        return -1;
-    }
     for (int i = 0; i < MAX_WINDOWS; i++) {
         if (g_windows[i].state & WNDSTATE_PRESENT && !(g_windows[i].state & WNDSTATE_DESTROYED)) {
             if (strcmp(g_windows[i].title, title) == 0) {
-                *wnd = g_windows + i;
-                return 0;
+                return i;
             }
         }
     }
@@ -149,22 +177,17 @@ int get_window_by_title(char* title, window_t** wnd)
     @brief 根据位置获取窗口
     @param x 窗口的x坐标
     @param y 窗口的y坐标
-    @param wnd 用于存储找到的窗口
+    @param wnd_id 用于存储找到的窗口
     @return 0 成功，-1 失败
 */
-int get_window_by_pos(int x, int y, window_t** wnd)
+int get_window_by_pos(int x, int y, int layer)
 {
-    if (wnd == NULL) {
-        return -1;
-    }
-
     for (int i = 0; i < MAX_WINDOWS; i++) {
         //TODO 窗口重叠前后处理
         if (g_windows[i].state & WNDSTATE_PRESENT && !(g_windows[i].state & WNDSTATE_DESTROYED)) {
             //在范围内
             if (x >= g_windows[i].x && x < g_windows[i].x + g_windows[i].width && y >= g_windows[i].y && y < g_windows[i].y + g_windows[i].height) {
-                *wnd = g_windows + i;
-                return 0;
+                return i;
             }
         }
     }
@@ -173,186 +196,379 @@ int get_window_by_pos(int x, int y, window_t** wnd)
 
 /**
     @brief 移动窗口
-    @param wnd 要移动的窗口
+    @param wnd_id 要移动的窗口
     @param x 新的x坐标
     @param y 新的y坐标
     @return 0 成功，-1 失败
 */
-int move_window(window_t** wnd, int x, int y)
+int move_window(int wnd_id, int x, int y)
 {
-    if (wnd == NULL || *wnd == NULL) {
-        return -1;
-    }
-    (*wnd)->x = x;
-    (*wnd)->y = y;
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
+    wnd->x = x;
+    wnd->y = y;
     return 0;
 }
 
 /**
     @brief 调整窗口大小
-    @param wnd 要调整大小的窗口
+    @param wnd_id 要调整大小的窗口
     @param width 新的宽度
     @param height 新的高度
     @return 0 成功，-1 失败
 */
-int resize_window(window_t** wnd, int width, int height)
+int resize_window(int wnd_id, int width, int height)
 {
-    if (wnd == NULL) {
-        return -1;
-    }
-    (*wnd)->width = width;
-    (*wnd)->height = height;
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
+    wnd->width = width;
+    wnd->height = height;
     return 0;
 }
 
 /**
     @brief 设置窗口标题
-    @param wnd 要设置标题的窗口
+    @param wnd_id 要设置标题的窗口
     @param title 新的窗口标题
     @return 0 成功，-1 失败
 */
-int set_window_title(window_t** wnd, char* title)
+int set_window_title(int wnd_id, char* title)
 {
-    if (wnd == NULL || title == NULL) {
-        return -1;
-    }
-    strncpy((*wnd)->title, title, sizeof((*wnd)->title) - 1);
-    (*wnd)->title[sizeof((*wnd)->title) - 1] = '\0';
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
+    strncpy(wnd->title, title, sizeof(wnd->title) - 1);
+    wnd->title[sizeof(wnd->title) - 1] = '\0';
     return 0;
 }
 
 /**
     @brief 获取窗口标题
-    @param wnd 要获取标题的窗口
+    @param wnd_id 要获取标题的窗口
     @param title 用于存储窗口标题的缓冲区
     @return 0 成功，-1 失败
 */
-int get_window_title(window_t* wnd, char* title)
+int get_window_title(int wnd_id, char* title)
 {
-    if (wnd == NULL || title == NULL) {
-        return -1;
-    }
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
     strncpy(title, wnd->title, sizeof(wnd->title));
     return 0;
 }
 
 /**
     @brief 设置窗口状态
-    @param wnd 要设置状态的窗口
+    @param wnd_id 要设置状态的窗口
     @param state 新的窗口状态
     @return 0 成功，-1 失败
 */
-int set_window_state(window_t** wnd, int state)
+int set_window_state(int wnd_id, int state)
 {
-    if (wnd == NULL) {
-        return -1;
-    }
-    (*wnd)->state = state;
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
+    wnd->state = state;
     return 0;
 }
-
 /**
     @brief 获取窗口状态
-    @param wnd 要获取状态的窗口
+    @param wnd_id 要获取状态的窗口
     @param state 用于存储窗口状态的指针
     @return 0 成功，-1 失败
 */
-int get_window_state(window_t* wnd, int* state)
+int get_window_state(int wnd_id, int* state)
 {
-    if (wnd == NULL || state == NULL) {
-        return -1;
-    }
+    CHECK_VALID_WNDID(wnd_id);
+    window_t* wnd = g_windows + wnd_id;
     *state = wnd->state;
     return 0;
 }
 
 /**
     @brief 显示窗口
-    @param wnd 要显示的窗口
+    @param wnd_id 要显示的窗口
     @return 0 成功，-1 失败
 */
-int show_window(window_t* wnd)
+int show_window(int wnd_id)
 {
-    if (wnd == NULL) {
-        return -1;
-    }
+    CHECK_VALID_WNDID(wnd_id);
     // 这里可以添加显示窗口的具体逻辑
+    g_windows[wnd_id].state |= WNDSTATE_VISIBLE;
     return 0;
 }
 
 /**
     @brief 隐藏窗口
-    @param wnd 要隐藏的窗口
+    @param wnd_id 要隐藏的窗口
     @return 0 成功，-1 失败
 */
-int hide_window(window_t* wnd)
+int hide_window(int wnd_id)
 {
-    if (wnd == NULL) {
-        return -1;
-    }
+    CHECK_VALID_WNDID(wnd_id);
     // 这里可以添加隐藏窗口的具体逻辑
+    g_windows[wnd_id].state &= ~WNDSTATE_VISIBLE;
     return 0;
 }
 
 /**
     @brief 设置窗口事件处理函数
-    @param wnd 要设置的窗口
+    @param wnd_id 要设置的窗口
     @param handler 事件处理函数
     @return 0 成功，-1 失败
 */
-int set_window_event_handler(window_t** wnd, window_event_handler_t handler)
+int set_window_event_handler(int wnd_id, int event_type, window_event_handler_t handler)
 {
-    if (wnd == NULL || handler == NULL) {
+    CHECK_VALID_WNDID(wnd_id);
+    if (event_type < 0 || event_type >= WNDEVENT_COUNT) {
         return -1;
     }
-    // 这里可以添加设置事件处理函数的具体逻辑
-    return 0;
+    g_windows[wnd_id].event_handlers[event_type] = handler;
+    return wnd_id * WNDEVENT_COUNT + event_type;
 }
 
 /**
     @brief 发送窗口事件
-    @param wnd 要发送事件的窗口
+    @param wnd_id 要发送事件的窗口
     @param event 要发送的事件
     @return 0 成功，-1 失败
 */
-int send_window_event(window_t* wnd, window_event_t* event)
+int send_window_event(int wnd_id, window_event_t* event)
 {
-    if (wnd == NULL || event == NULL) {
+    CHECK_VALID_WNDID(wnd_id);
+    if (event->event_type < 0 || event->event_type >= WNDEVENT_COUNT) {
         return -1;
     }
-    // 这里可以添加发送事件的具体逻辑
+    window_event_t* new_event = (window_event_t*)KMALLOC(sizeof(window_event_t));
+    if (new_event == NULL) {
+        return -1;
+    }
+    memcpy(new_event, event, sizeof(window_event_t));
+    if (!g_event_queue) {
+        g_event_queue = new_event;
+    } else {
+        window_event_t* tail = g_event_queue;
+        for (; tail->next; tail = tail->next) {
+        }
+        tail->next = new_event;
+        new_event->next = NULL;
+    }
     return 0;
 }
 
 /**
     @brief 添加窗口事件监听器
-    @param wnd 要添加监听器的窗口
+    @param wnd_id 要添加监听器的窗口
     @param event_type 要监听的事件类型
     @param listener 监听器函数
     @return 返回监听器ID，用于移除监听器
 */
-int add_window_event_listener(window_t** wnd, int event_type, window_event_handler_t listener)
+int add_window_event_listener(int wnd_id, int event_type, window_event_handler_t listenerfunc)
 {
-    if (wnd == NULL || listener == NULL) {
+    CHECK_VALID_WNDID(wnd_id);
+    if (event_type < 0 || event_type >= WNDEVENT_COUNT) {
         return -1;
     }
-    // 这里可以添加添加监听器的具体逻辑
-    // 暂时简单返回一个假的ID
-    return 1;
+    window_event_listener_t* listener = (window_event_listener_t*)KMALLOC(sizeof(window_event_listener_t));
+    if (listener == NULL) {
+        return -1;
+    }
+    listener->wnd_id = wnd_id;
+    listener->event_type = event_type;
+    listener->listener = listenerfunc;
+    listener->next = g_event_listeners;
+    g_event_listeners = listener;
+    return listener->listener_id = LISTENER_ID;
 }
 
 /**
     @brief 移除窗口事件监听器
-    @param wnd 要移除监听器的窗口
+    @param wnd_id 要移除监听器的窗口
     @param event_type 要移除的事件类型
     @param listener_id 要移除的监听器ID
     @return 0 成功，-1 失败
 */
-int remove_window_event_listener(window_t** wnd, int event_type, int listener_id)
+int remove_window_event_listener(int wnd_id, int event_type, int listener_id)
 {
-    if (wnd == NULL) {
+    CHECK_VALID_WNDID(wnd_id);
+    if (event_type < 0 || event_type >= WNDEVENT_COUNT) {
         return -1;
     }
-    // 这里可以添加移除监听器的具体逻辑
-    return 0;
+    for (window_event_listener_t *p = g_event_listeners, *prev = p; p; prev = p, p = p->next) {
+        if (p->wnd_id == wnd_id && p->event_type == event_type && p->listener_id == listener_id) {
+            prev->next = p->next;
+            KFREE(p);
+            return 0;
+        }
+    }
+    return -1;
+}
+void deal_events()
+{
+    window_event_t* event = g_event_queue;
+    while (event) {
+        //执行handler
+        window_t* wnd = g_windows + event->sender;
+        if (wnd->event_handlers[event->event_type]) {
+            wnd->event_handlers[event->event_type](event->sender, event->event_type, event);
+        }
+        //执行listener
+        for (window_event_listener_t* listener = g_event_listeners; listener; listener = listener->next) {
+            if (listener->wnd_id == event->sender && listener->event_type == event->event_type) {
+                listener->listener(event->sender, event->event_type, event);
+            }
+        }
+        window_event_t* next = event->next;
+        KFREE(event);
+        event = next;
+    }
+    g_event_queue = NULL;
+}
+static int clicked_times = 0;
+int mouse_down_x, mouse_down_y, mouse_down_button;
+int last_mouse_move_x, last_mouse_move_y;
+int g_setted_mouse_consecutive_click_max_time = 20;
+static int mouse_click_timer = 0, last_mouse_down_wnd_id = -1, last_mouse_down_button = -1;
+int g_focused_wnd_id = -1;
+static int last_key_code_down = -1;
+static int mouse_down_flag = 0;
+void _on_clock_int()
+{
+    if (++mouse_click_timer >= g_setted_mouse_consecutive_click_max_time) {
+        mouse_click_timer = 0;
+        clicked_times = 0;
+    }
+    deal_events();
+    _render_windows();
+}
+void _on_mouse_down(int x, int y, int button)
+{
+    mouse_down_x = x;
+    mouse_down_y = y;
+    mouse_down_button = button;
+    mouse_down_flag = 1;
+    last_mouse_down_button = button;
+    last_mouse_down_wnd_id = get_window_by_pos(x, y, 0);
+    int wnd_id = get_window_by_pos(x, y, 0);
+    g_focused_wnd_id = wnd_id;
+    window_event_t event = {
+        .event_type = WND_EVENT_MOUSE_DOWN,
+        .sender = wnd_id,
+        .mouse_button = button,
+        .x = x,
+        .y = y,
+    };
+    send_window_event(wnd_id, &event);
+}
+void _on_mouse_up(int x, int y, int button)
+{
+    mouse_down_flag = 0;
+    int wnd_id = get_window_by_pos(x, y, 0);
+    window_event_t event = {
+        .event_type = WND_EVENT_MOUSE_UP,
+        .sender = wnd_id,
+        .mouse_button = button,
+        .x = x,
+        .y = y,
+    };
+    send_window_event(wnd_id, &event);
+    if (wnd_id == last_mouse_down_wnd_id && button == last_mouse_down_button) {
+        _on_mouse_click(wnd_id, x, y, button);
+    }
+    if (mouse_click_timer < g_setted_mouse_consecutive_click_max_time) {
+        clicked_times++;
+    } else {
+        clicked_times = 0;
+    }
+}
+void _on_mouse_move(int x, int y)
+{
+    last_mouse_move_x = x;
+    last_mouse_move_y = y;
+    int wnd_id = get_window_by_pos(x, y, 0);
+    window_event_t event = {
+        .event_type = WND_EVENT_MOUSE_MOVE,
+        .sender = wnd_id,
+        .x = x,
+        .y = y,
+    };
+    send_window_event(wnd_id, &event);
+    if (mouse_down_flag && g_windows[wnd_id].type == WNDTYPE_WINDOW) {
+        window_event_t window_move_event = {
+            .event_type = WND_EVENT_WINDOW_MOVE,
+            .sender = wnd_id,
+            .x = x - mouse_down_x,
+            .y = y - mouse_down_y,
+            .dx = x - mouse_down_x,
+            .dy = y - mouse_down_y,
+        };
+        send_window_event(wnd_id, &window_move_event);
+    }
+}
+void _on_mouse_click(int wnd_id, int x, int y, int button)
+{
+    window_event_t clicked_event = {
+        .event_type = WND_EVENT_MOUSE_CLICK,
+        .sender = wnd_id,
+        .mouse_button = button,
+        .x = x,
+        .y = y,
+    };
+    send_window_event(wnd_id, &clicked_event);
+    //调整窗口在g_wnd_layer_ordered中的位置，让获得焦点的窗口位于最前面
+    window_t* wnd = g_windows + wnd_id;
+    while (wnd->type != WNDTYPE_WINDOW && wnd->parent) {
+        wnd = wnd->parent;
+    }
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+        if (g_wnd_layer_ordered[i] == wnd) {
+            for (int j = i; j < MAX_WINDOWS - 1; j++) {
+                g_wnd_layer_ordered[j] = g_wnd_layer_ordered[j + 1];
+            }
+        }
+    }
+    for (int i = 0; i < MAX_WINDOWS - 1; i++) {
+        g_wnd_layer_ordered[i + 1] = g_wnd_layer_ordered[i];
+    }
+    g_wnd_layer_ordered[0] = wnd;
+}
+void _on_key_down(int key_code)
+{
+    last_key_code_down = key_code;
+    window_event_t event = {
+        .event_type = WND_EVENT_KEY_DOWN,
+        .sender = g_focused_wnd_id,
+        .key_code = key_code,
+    };
+    send_window_event(g_focused_wnd_id, &event);
+}
+void _on_key_up(int key_code)
+{
+    window_event_t event = {
+        .event_type = WND_EVENT_KEY_UP,
+        .sender = g_focused_wnd_id,
+        .key_code = key_code,
+    };
+    send_window_event(g_focused_wnd_id, &event);
+    if (last_key_code_down == key_code) {
+        _on_key_press(key_code);
+    }
+}
+void _on_key_press(int key_code)
+{
+    window_event_t event = {
+        .event_type = WND_EVENT_KEY_PRESS,
+        .sender = g_focused_wnd_id,
+        .key_code = key_code,
+    };
+    send_window_event(g_focused_wnd_id, &event);
+}
+void _render_windows()
+{
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+        window_t* wnd = g_wnd_layer_ordered[i];
+        if (wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
+            && wnd->type == WNDTYPE_WINDOW && wnd->state & WNDSTATE_VISIBLE) {
+#ifdef DEBUG
+            printf("render window %lld\n", wnd - g_windows);
+#endif
+        }
+    }
 }

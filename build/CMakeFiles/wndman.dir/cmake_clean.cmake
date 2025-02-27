@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/wndman.dir/src/test.c.obj"
+  "CMakeFiles/wndman.dir/src/test.c.obj.d"
   "CMakeFiles/wndman.dir/src/wndman.c.obj"
   "CMakeFiles/wndman.dir/src/wndman.c.obj.d"
   "libwndman.dll.a"

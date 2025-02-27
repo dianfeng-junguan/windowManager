@@ -9,6 +9,13 @@
 #define KMALLOC(size) kmalloc(size, NO_ALIGN)
 #define KFREE(ptr) kfree(ptr)
 #endif
+#ifdef DEBUG
+#include <windows.h>
+extern HDC hdc;
+extern HDC hMemDC;
+extern HBITMAP hBitmap;
+extern HWND hWnd;
+#endif
 static int listener_id_gen = 0;
 #define LISTENER_ID (listener_id_gen++)
 window_t* g_wnd_layer_ordered[MAX_WINDOWS] = { 0 };
@@ -30,8 +37,18 @@ window_event_handler_t g_default_event_handlers[WNDEVENT_COUNT] = {
     [WND_EVENT_WINDOW_FOCUS] = default_window_focus_event_handler,
     [WND_EVENT_WINDOW_LOST_FOCUS] = default_window_lost_focus_event_handler,
 };
-void default_mouse_move_event_handler(int wnd_id, int event_type, window_event_t* event) { }
-void default_mouse_down_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_mouse_move_event_handler(int wnd_id, int event_type, window_event_t* event)
+{
+#ifdef DEBUG
+    // printf("default_mouse_move_event_handler: wnd_id=%d, x=%d, y=%d\n", wnd_id, event->x, event->y);
+#endif
+}
+void default_mouse_down_event_handler(int wnd_id, int event_type, window_event_t* event)
+{
+#ifdef DEBUG
+    printf("default_mouse_down_event_handler: wnd_id=%d, x=%d, y=%d, button=%d\n", wnd_id, event->x, event->y, event->mouse_button);
+#endif
+}
 void default_mouse_up_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 void default_mouse_double_click_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 void default_mouse_wheel_event_handler(int wnd_id, int event_type, window_event_t* event) { }
@@ -39,7 +56,16 @@ void default_key_down_event_handler(int wnd_id, int event_type, window_event_t* 
 void default_key_up_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 void default_key_press_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 void default_window_resize_event_handler(int wnd_id, int event_type, window_event_t* event) { }
-void default_window_move_event_handler(int wnd_id, int event_type, window_event_t* event) { }
+void default_window_move_event_handler(int wnd_id, int event_type, window_event_t* event)
+{
+    window_t* wnd = g_windows + wnd_id;
+    wnd->x += event->dx;
+    wnd->y += event->dy;
+#ifdef DEBUG
+    printf("default_window_move_event_handler: wnd_id=%d, x=%d, y=%d\n", wnd_id, wnd->x, wnd->y);
+    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+#endif
+}
 void default_window_close_event_handler(int wnd_id, int event_type, window_event_t* event)
 {
     destroy_window(wnd_id);
@@ -81,6 +107,7 @@ int create_window(char* title, int wnd_type)
             strncpy(wndp->title, title, sizeof(wndp->title) - 1);
             wndp->title[sizeof(wndp->title) - 1] = '\0';
             memcpy(wndp->event_handlers, g_default_event_handlers, sizeof(g_default_event_handlers));
+            _add_to_layer_ordered(i, 0);
             return i;
         }
     }
@@ -394,7 +421,11 @@ int remove_window_event_listener(int wnd_id, int event_type, int listener_id)
     for (window_event_listener_t *p = g_event_listeners, *prev = p; p; prev = p, p = p->next) {
         if (p->wnd_id == wnd_id && p->event_type == event_type && p->listener_id == listener_id) {
             prev->next = p->next;
+            p->event_type = -1;
             KFREE(p);
+            if (p == g_event_listeners) {
+                g_event_listeners = p->next;
+            }
             return 0;
         }
     }
@@ -436,7 +467,9 @@ void _on_clock_int()
         clicked_times = 0;
     }
     deal_events();
+#ifndef DEBUG
     _render_windows();
+#endif
 }
 void _on_mouse_down(int x, int y, int button)
 {
@@ -445,8 +478,7 @@ void _on_mouse_down(int x, int y, int button)
     mouse_down_button = button;
     mouse_down_flag = 1;
     last_mouse_down_button = button;
-    last_mouse_down_wnd_id = get_window_by_pos(x, y, 0);
-    int wnd_id = get_window_by_pos(x, y, 0);
+    int wnd_id = last_mouse_down_wnd_id = get_window_by_pos(x, y, 0);
     g_focused_wnd_id = wnd_id;
     window_event_t event = {
         .event_type = WND_EVENT_MOUSE_DOWN,
@@ -480,8 +512,6 @@ void _on_mouse_up(int x, int y, int button)
 }
 void _on_mouse_move(int x, int y)
 {
-    last_mouse_move_x = x;
-    last_mouse_move_y = y;
     int wnd_id = get_window_by_pos(x, y, 0);
     window_event_t event = {
         .event_type = WND_EVENT_MOUSE_MOVE,
@@ -496,11 +526,13 @@ void _on_mouse_move(int x, int y)
             .sender = wnd_id,
             .x = x - mouse_down_x,
             .y = y - mouse_down_y,
-            .dx = x - mouse_down_x,
-            .dy = y - mouse_down_y,
+            .dx = x - last_mouse_move_x,
+            .dy = y - last_mouse_move_y,
         };
         send_window_event(wnd_id, &window_move_event);
     }
+    last_mouse_move_x = x;
+    last_mouse_move_y = y;
 }
 void _on_mouse_click(int wnd_id, int x, int y, int button)
 {
@@ -560,14 +592,28 @@ void _on_key_press(int key_code)
     };
     send_window_event(g_focused_wnd_id, &event);
 }
+int _add_to_layer_ordered(int wnd_id, int layer)
+{
+    if (layer < 0 || layer >= MAX_WINDOWS) {
+        return -1;
+    }
+    for (int i = layer; i < MAX_WINDOWS - 1; i++) {
+        g_wnd_layer_ordered[i + 1] = g_wnd_layer_ordered[i];
+    }
+    g_wnd_layer_ordered[layer] = g_windows + wnd_id;
+    return 0;
+}
 void _render_windows()
 {
+
     for (int i = 0; i < MAX_WINDOWS; i++) {
         window_t* wnd = g_wnd_layer_ordered[i];
-        if (wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
+        if (wnd && wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
             && wnd->type == WNDTYPE_WINDOW && wnd->state & WNDSTATE_VISIBLE) {
 #ifdef DEBUG
-            printf("render window %lld\n", wnd - g_windows);
+            // printf("render window %lld\n", wnd - g_windows);
+            extern void draw_window(HDC hdc, window_t * wnd);
+            draw_window(hdc, wnd);
 #endif
         }
     }

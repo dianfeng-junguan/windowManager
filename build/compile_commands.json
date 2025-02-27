@@ -1,7 +1,13 @@
 [
 {
   "directory": "D:/Code/Comprehensive/OS_mods/wndman/build",
-  "command": "E:\\Mingw\\bin\\gcc.exe -DDEBUG @CMakeFiles/wndman.dir/includes_C.rsp  -o CMakeFiles\\wndman.dir\\src\\wndman.c.obj -c D:\\Code\\Comprehensive\\OS_mods\\wndman\\src\\wndman.c",
+  "command": "E:\\Mingw\\bin\\gcc.exe -DDEBUG @CMakeFiles/wndman.dir/includes_C.rsp -g -fno-pie -fno-pic -nostdlib -fno-stack-protector -nostartfiles -I include -m64 -O0 -fno-strict-aliasing -mcmodel=large -fPIC -o CMakeFiles\\wndman.dir\\src\\test.c.obj -c D:\\Code\\Comprehensive\\OS_mods\\wndman\\src\\test.c",
+  "file": "D:/Code/Comprehensive/OS_mods/wndman/src/test.c",
+  "output": "CMakeFiles/wndman.dir/src/test.c.obj"
+},
+{
+  "directory": "D:/Code/Comprehensive/OS_mods/wndman/build",
+  "command": "E:\\Mingw\\bin\\gcc.exe -DDEBUG @CMakeFiles/wndman.dir/includes_C.rsp -g -fno-pie -fno-pic -nostdlib -fno-stack-protector -nostartfiles -I include -m64 -O0 -fno-strict-aliasing -mcmodel=large -fPIC -o CMakeFiles\\wndman.dir\\src\\wndman.c.obj -c D:\\Code\\Comprehensive\\OS_mods\\wndman\\src\\wndman.c",
   "file": "D:/Code/Comprehensive/OS_mods/wndman/src/wndman.c",
   "output": "CMakeFiles/wndman.dir/src/wndman.c.obj"
 }

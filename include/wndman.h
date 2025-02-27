@@ -154,6 +154,8 @@ void _on_key_press(int key_code);
 void _on_clock_int();
 void _render_windows();
 
+int _add_to_layer_ordered(int wnd_id, int layer);
+
 void default_mouse_move_event_handler(int wnd_id, int event_type, window_event_t* event);
 void default_mouse_down_event_handler(int wnd_id, int event_type, window_event_t* event);
 void default_mouse_up_event_handler(int wnd_id, int event_type, window_event_t* event);
@@ -168,3 +170,5 @@ void default_window_close_event_handler(int wnd_id, int event_type, window_event
 void default_window_focus_event_handler(int wnd_id, int event_type, window_event_t* event);
 void default_window_lost_focus_event_handler(int wnd_id, int event_type, window_event_t* event);
 void default_timer_event_handler(int wnd_id, int event_type, window_event_t* event);
+
+int init_wndman();

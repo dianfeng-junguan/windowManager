@@ -84,12 +84,12 @@ clean: CMakeFiles/wndman.dir/clean
 CMakeFiles/wndman.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Code\Comprehensive\OS_mods\wndman\build\CMakeFiles --progress-num=1,2 "Built target wndman"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Code\Comprehensive\OS_mods\wndman\build\CMakeFiles --progress-num=1,2,3 "Built target wndman"
 .PHONY : CMakeFiles/wndman.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/wndman.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Code\Comprehensive\OS_mods\wndman\build\CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\Code\Comprehensive\OS_mods\wndman\build\CMakeFiles 3
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 CMakeFiles/wndman.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start D:\Code\Comprehensive\OS_mods\wndman\build\CMakeFiles 0
 .PHONY : CMakeFiles/wndman.dir/rule

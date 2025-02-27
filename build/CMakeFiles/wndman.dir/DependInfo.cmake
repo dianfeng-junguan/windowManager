@@ -8,6 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "D:/Code/Comprehensive/OS_mods/wndman/src/test.c" "CMakeFiles/wndman.dir/src/test.c.obj" "gcc" "CMakeFiles/wndman.dir/src/test.c.obj.d"
   "D:/Code/Comprehensive/OS_mods/wndman/src/wndman.c" "CMakeFiles/wndman.dir/src/wndman.c.obj" "gcc" "CMakeFiles/wndman.dir/src/wndman.c.obj.d"
   )
 

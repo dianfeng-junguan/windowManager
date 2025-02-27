@@ -6,5 +6,5 @@ C_DEFINES = -DDEBUG
 
 C_INCLUDES = @CMakeFiles/wndman.dir/includes_C.rsp
 
-C_FLAGS = 
+C_FLAGS = -g -fno-pie -fno-pic -nostdlib -fno-stack-protector -nostartfiles -I include -m64 -O0 -fno-strict-aliasing -mcmodel=large -fPIC
 

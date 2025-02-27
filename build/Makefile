@@ -128,6 +128,30 @@ wndman/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/build
 .PHONY : wndman/fast
 
+src/test.obj: src/test.c.obj
+.PHONY : src/test.obj
+
+# target to build an object file
+src/test.c.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/src/test.c.obj
+.PHONY : src/test.c.obj
+
+src/test.i: src/test.c.i
+.PHONY : src/test.i
+
+# target to preprocess a source file
+src/test.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/src/test.c.i
+.PHONY : src/test.c.i
+
+src/test.s: src/test.c.s
+.PHONY : src/test.s
+
+# target to generate assembly for a file
+src/test.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\wndman.dir\build.make CMakeFiles/wndman.dir/src/test.c.s
+.PHONY : src/test.c.s
+
 src/wndman.obj: src/wndman.c.obj
 .PHONY : src/wndman.obj
 
@@ -161,6 +185,9 @@ help:
 	@echo ... edit_cache
 	@echo ... rebuild_cache
 	@echo ... wndman
+	@echo ... src/test.obj
+	@echo ... src/test.i
+	@echo ... src/test.s
 	@echo ... src/wndman.obj
 	@echo ... src/wndman.i
 	@echo ... src/wndman.s

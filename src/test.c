@@ -88,9 +88,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     }
 }
 // 自定义事件处理函数示例
-void custom_event_handler(int wnd_id, int event_type, window_event_t* event)
+void custom_event_handler(windowptr_t wndptr, int event_type, window_event_t* event)
 {
-    printf("Custom event handler called for window %d, event type %d\n", wnd_id, event_type);
+    printf("Custom event handler called for window %p, event type %d\n", wndptr, event_type);
 }
 int main()
 {
@@ -144,27 +144,27 @@ int main()
     char title[] = "Test Window";
     char title2[] = "Test Window2";
     int wnd_type = WNDTYPE_WINDOW;
-    int wnd_id = create_window(title, wnd_type);
-    int wnd_id2 = create_window(title2, WNDTYPE_BUTTON);
-    resize_window(wnd_id2, 100, 50);
-    move_window(wnd_id2, 100, 100);
-    attach_window(wnd_id2, wnd_id);
-    show_window(wnd_id2);
-    if (wnd_id < 0 || wnd_id2 < 0) {
+    windowptr_t wndptr = create_window(title, wnd_type);
+    // windowptr_t wndptr2 = create_window(title2, WNDTYPE_BUTTON);
+    // resize_window(wndptr2, 100, 50);
+    // move_window(wndptr2, 100, 100);
+    // attach_window(wndptr2, wndptr);
+    // show_window(wndptr2);
+    if (wndptr < 0) {
         printf("Failed to create window\n");
         return -1;
     }
-    printf("Window created with ID: %d\n", wnd_id);
+    printf("Window created with ID: %p\n", wndptr);
 
     // 测试 move_window
-    if (move_window(wnd_id, 0, 0) != 0) {
+    if (move_window(wndptr, 0, 0) != 0) {
         printf("Failed to move window\n");
     } else {
         printf("Window moved successfully\n");
     }
 
     // 测试 show_window
-    if (show_window(wnd_id) != 0) {
+    if (show_window(wndptr) != 0) {
         printf("Failed to show window\n");
     } else {
         printf("Window shown successfully\n");
@@ -172,18 +172,18 @@ int main()
 
     // 测试 set_window_event_handler
     int event_type = WND_EVENT_WINDOW_MOVE;
-    if (set_window_event_handler(wnd_id, event_type, custom_event_handler) < 0) {
+    if (set_window_event_handler(wndptr, event_type, custom_event_handler) < 0) {
         printf("Failed to set window event handler\n");
     } else {
         printf("Window event handler set successfully\n");
     }
     //还原默认事件处理函数
-    set_window_event_handler(wnd_id, event_type, default_window_move_event_handler);
+    set_window_event_handler(wndptr, event_type, default_window_move_event_handler);
 
     // 测试 add_window_event_listener
     event_type = WND_EVENT_MOUSE_DOWN;
     int listener_id = 0; // 这里需要根据实际情况设置正确的 listener_id
-    if ((listener_id = add_window_event_listener(wnd_id, event_type, custom_event_handler)) < 0) {
+    if ((listener_id = add_window_event_listener(wndptr, event_type, custom_event_handler)) < 0) {
         printf("Failed to add window event listener\n");
     } else {
         printf("Window event listener added successfully\n");
@@ -193,9 +193,9 @@ int main()
         .event_type = event_type,
         .x = 0,
         .y = 0,
-        .sender = wnd_id
+        .sender = wndptr
     };
-    if (send_window_event(wnd_id, &event) != 0) {
+    if (send_window_event(wndptr, &event) != 0) {
         printf("Failed to send window event\n");
     } else {
         printf("Window event sent successfully\n");
@@ -211,20 +211,20 @@ int main()
     }
 
     // 测试 remove_window_event_listener
-    if (remove_window_event_listener(wnd_id, event_type, listener_id) != 0) {
+    if (remove_window_event_listener(wndptr, event_type, listener_id) != 0) {
         printf("Failed to remove window event listener\n");
     } else {
         printf("Window event listener removed successfully\n");
     }
     // 测试 detach_window
-    if (detach_window(wnd_id) != 0) {
+    if (detach_window(wndptr) != 0) {
         printf("Failed to detach window\n");
     } else {
         printf("Window detached successfully\n");
     }
 
     // 测试 destroy_window
-    if (destroy_window(wnd_id) != 0) {
+    if (destroy_window(wndptr) != 0) {
         printf("Failed to destroy window\n");
     } else {
         printf("Window destroyed successfully\n");
@@ -342,5 +342,10 @@ void DrawWin2000Button(HDC hdc, int x, int y, int width, int height, const char*
 // 定义绘制单个窗口的函数
 void draw_button(HDC hdci, window_t* wnd)
 {
-    DrawWin2000Button(hdci, wnd->x, wnd->y, wnd->width, wnd->height, wnd->title);
+    int x, y, w, h;
+    x = wnd->x + (wnd->parent ? wnd->parent->x : 0);
+    y = wnd->y + (wnd->parent ? wnd->parent->y : 0);
+    w = wnd->width;
+    h = wnd->height;
+    DrawWin2000Button(hdci, x, y, w, h, wnd->title);
 }

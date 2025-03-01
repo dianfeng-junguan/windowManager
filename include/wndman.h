@@ -4,6 +4,7 @@
 #define DEFAULT_WINDOW_WIDTH 640
 #define DEFAULT_WINDOW_HEIGHT 480
 #define DEFAULT_WINDOW_TITLE "Window"
+typedef struct _window;
 typedef struct _window_event{
     int x, y;
     int dx,dy;
@@ -11,7 +12,7 @@ typedef struct _window_event{
     int mouse_button;
     int key_code;
     int state;
-    int sender;
+    struct _window* sender;
     int timer_id;
     struct _window_event* next;
 } window_event_t;
@@ -33,7 +34,7 @@ enum{
     WND_EVENT_TIMER,
 };
 #define WNDEVENT_COUNT 16
-typedef void (*window_event_handler_t)(int wnd_id,int event_type,window_event_t* event);
+typedef void (*window_event_handler_t)(struct _window* wndptr,int event_type,window_event_t* event);
 typedef struct _window{
     int x, y, width, height;
     int type;
@@ -45,8 +46,9 @@ typedef struct _window{
     struct _window* parent;
     window_event_handler_t event_handlers[WNDEVENT_COUNT];
 } window_t;
+typedef window_t* windowptr_t;
 typedef struct _window_event_listener{
-    int wnd_id;
+    windowptr_t wndptr;
     int listener_id;
     int event_type;
     window_event_handler_t listener;
@@ -79,23 +81,23 @@ typedef struct _window_event_listener{
     @param wnd_type 窗口类型
     @return 成功则返回窗口号(>=0)，-1 失败
 */
-int create_window(char* title,int wnd_type);
-int destroy_window(int wnd_id);
+windowptr_t create_window(char* title,int wnd_type);
+int destroy_window(windowptr_t wndptr);
 /**
     @brief 将窗口附加到父窗口上
     @param wnd_id 要附加的窗口
     @param parent 父窗口
     @return 0 成功，-1 失败
 */
-int attach_window(int wnd_id,int parent_id);
+int attach_window(windowptr_t wndptr,windowptr_t parent_wndptr);
 /**
     @brief 将窗口从父窗口上分离
     @param wnd_id 要分离的窗口
     @return 0 成功，-1 失败
 */
-int detach_window(int wnd_id);
+int detach_window(windowptr_t wndptr);
 
-int get_window_by_title(char* title);
+windowptr_t get_window_by_title(char* title);
 /**
     @brief 根据坐标获取窗口
     @param x 窗口坐标x
@@ -103,17 +105,17 @@ int get_window_by_title(char* title);
     @param layer 窗口层级
     @return 成功则返回窗口号(>=0)，-1 失败
 */
-int get_window_by_pos(int x,int y,int layer);
+windowptr_t get_window_by_pos(int x,int y,int layer);
 
-int move_window(int wnd_id,int x,int y);
-int resize_window(int wnd_id,int width,int height);
-int set_window_title(int wnd_id,char* title);
-int get_window_title(int wnd_id,char* title);
-int set_window_state(int wnd_id,int state);
-int get_window_state(int wnd_id,int* state);
+int move_window(windowptr_t wndptr,int x,int y);
+int resize_window(windowptr_t wndptr,int width,int height);
+int set_window_title(windowptr_t wndptr,char* title);
+int get_window_title(windowptr_t wndptr,char* title);
+int set_window_state(windowptr_t wndptr,int state);
+int get_window_state(windowptr_t wndptr,int* state);
 
-int show_window(int wnd_id);
-int hide_window(int wnd_id);
+int show_window(windowptr_t wndptr);
+int hide_window(windowptr_t wndptr);
 
 /**
     @brief 设置窗口事件处理函数
@@ -121,8 +123,8 @@ int hide_window(int wnd_id);
     @param handler 事件处理函数
     @return 0 成功，-1 失败
 */
-int set_window_event_handler(int wnd_id,int event_type,window_event_handler_t handler);
-int send_window_event(int wnd_id,window_event_t* event);
+int set_window_event_handler(windowptr_t wndptr,int event_type,window_event_handler_t handler);
+int send_window_event(windowptr_t wndptr,window_event_t* event);
 /**
     @brief 添加窗口事件监听器
     @param wnd_id 要添加监听器的窗口
@@ -130,7 +132,7 @@ int send_window_event(int wnd_id,window_event_t* event);
     @param listener 监听器函数
     @return 返回监听器ID，用于移除监听器
 */
-int add_window_event_listener(int wnd_id,int event_type,window_event_handler_t listener);
+int add_window_event_listener(windowptr_t wndptr,int event_type,window_event_handler_t listener);
 /**
     @brief 移除窗口事件监听器
     @param wnd_id 要移除监听器的窗口
@@ -138,7 +140,7 @@ int add_window_event_listener(int wnd_id,int event_type,window_event_handler_t l
     @param listener_id 要移除的监听器ID
     @return 0 成功，-1 失败
 */
-int remove_window_event_listener(int wnd_id,int event_type,int listener_id);
+int remove_window_event_listener(windowptr_t wndptr,int event_type,int listener_id);
 
 /**
     @brief 处理事件
@@ -149,34 +151,38 @@ void deal_events();
 /**
     @brief 创建控件，内部函数
 */
-int _create_control(char* title,int wnd_type);
-int _offset_window(int wnd_id, int dx, int dy);
+windowptr_t _create_control(char* title,int wnd_type);
+int _offset_window(windowptr_t wndptr, int dx, int dy);
 //对接外设中断的函数
 void _on_mouse_down(int x, int y, int button);
 void _on_mouse_up(int x, int y, int button);
 void _on_mouse_move(int x, int y);
-void _on_mouse_click(int wnd_id,int x, int y, int button);
+void _on_mouse_click(windowptr_t wndptr,int x, int y, int button);
 void _on_key_down(int key_code);
 void _on_key_up(int key_code);
 void _on_key_press(int key_code);
 void _on_clock_int();
 void _render_windows();
 
-int _add_to_layer_ordered(int wnd_id, int layer);
+int _add_to_layer_ordered(windowptr_t wndptr, int layer);
 
-void default_mouse_move_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_mouse_down_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_mouse_up_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_mouse_double_click_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_mouse_wheel_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_key_down_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_key_up_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_key_press_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_window_resize_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_window_move_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_window_close_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_window_focus_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_window_lost_focus_event_handler(int wnd_id, int event_type, window_event_t* event);
-void default_timer_event_handler(int wnd_id, int event_type, window_event_t* event);
+void _wnd_list_add(window_t** list, window_t* wnd);
+void _wnd_list_remove(window_t** list, window_t* wnd);
 
+void default_mouse_move_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_mouse_down_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_mouse_up_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_mouse_double_click_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_mouse_wheel_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_key_down_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_key_up_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_key_press_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_window_resize_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_window_move_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_window_close_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_window_focus_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_window_lost_focus_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+void default_timer_event_handler(windowptr_t wndptr, int event_type, window_event_t* event);
+
+void _wndpresethandler_closebutton_clicked(windowptr_t wndptr, int event_type, window_event_t* event);
 int init_wndman();

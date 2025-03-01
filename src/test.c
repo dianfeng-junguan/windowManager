@@ -37,11 +37,25 @@ LRESULT CALLBACK MouseUpHandler(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     _on_mouse_up(x, y, button);
     return 0;
 }
+// 从虚拟键码转换为 ASCII 码
+char KeyCodeToAscii(UINT keyCode)
+{
+    BYTE keyState[256];
+    // 获取当前键盘状态
+    GetKeyboardState(keyState);
 
+    WORD asciiCode;
+    // 尝试将虚拟键码转换为 ASCII 码
+    int result = ToAscii(keyCode, 0, keyState, &asciiCode, 0);
+    if (result > 0) {
+        return (char)(asciiCode);
+    }
+    return '\0';
+}
 // 键盘按下处理函数
 LRESULT CALLBACK KeyPressHandler(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    _on_key_press(wParam);
+    _on_key_down(KeyCodeToAscii(wParam));
     return 0;
 }
 
@@ -145,11 +159,22 @@ int main()
     char title2[] = "Test Window2";
     int wnd_type = WNDTYPE_WINDOW;
     windowptr_t wndptr = create_window(title, wnd_type);
-    // windowptr_t wndptr2 = create_window(title2, WNDTYPE_BUTTON);
-    // resize_window(wndptr2, 100, 50);
-    // move_window(wndptr2, 100, 100);
-    // attach_window(wndptr2, wndptr);
-    // show_window(wndptr2);
+    windowptr_t wndptr2 = create_window(title2, WNDTYPE_BUTTON);
+    attach_window(wndptr2, wndptr);
+    resize_window(wndptr2, 100, 30);
+    move_window(wndptr2, 0, 25);
+    show_window(wndptr2);
+    windowptr_t editbox = create_window("EditBox", WNDTYPE_EDITBOX);
+    attach_window(editbox, wndptr);
+    resize_window(editbox, 200, 200);
+    move_window(editbox, 0, 60);
+    show_window(editbox);
+    set_window_text(editbox, "This is a EditBox");
+    //第二个窗口
+    windowptr_t wndptr3 = create_window("Test Window3", WNDTYPE_WINDOW);
+    // resize_window(wndptr3, 200, 200);
+    move_window(wndptr3, 200, 200);
+    show_window(wndptr3);
     if (wndptr < 0) {
         printf("Failed to create window\n");
         return -1;
@@ -289,8 +314,7 @@ void draw_window(HDC hdci, window_t* wnd)
 
 // 绘制仿 Win2000 风格按钮的函数
 void DrawWin2000Button(HDC hdc, int x, int y, int width, int height, const char* text)
-{
-    // 定义 Win2000 风格按钮的颜色
+{ // 定义 Win2000 风格正常状态按钮的颜色
     COLORREF borderColor = RGB(0, 0, 128);
     COLORREF lightBorderColor = RGB(255, 255, 255);
     COLORREF darkBorderColor = RGB(0, 0, 0);
@@ -339,6 +363,56 @@ void DrawWin2000Button(HDC hdc, int x, int y, int width, int height, const char*
     DrawTextA(hdc, text, -1, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }
 
+// 绘制仿 Win2000 风格按下状态按钮的函数
+void DrawWin2000PressedButton(HDC hdc, int x, int y, int width, int height, const char* text)
+{ // 定义 Win2000 风格按下状态按钮的颜色
+    COLORREF borderColor = RGB(0, 0, 128);
+    COLORREF lightBorderColor = RGB(0, 0, 0);
+    COLORREF darkBorderColor = RGB(255, 255, 255);
+    COLORREF backgroundColor = RGB(160, 160, 160); // 更暗的背景色
+
+    // 绘制按钮的外边框
+    HPEN borderPen = CreatePen(PS_SOLID, 1, borderColor);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    Rectangle(hdc, x, y, x + width, y + height);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+
+    // 绘制按钮的内边框（高光和阴影）
+    HPEN lightPen = CreatePen(PS_SOLID, 1, lightBorderColor);
+    HPEN darkPen = CreatePen(PS_SOLID, 1, darkBorderColor);
+
+    // 高光部分
+    SelectObject(hdc, lightPen);
+    MoveToEx(hdc, x + width - 2, y + 1, NULL);
+    LineTo(hdc, x + width - 2, y + height - 2);
+    LineTo(hdc, x + 1, y + height - 2);
+
+    // 阴影部分
+    SelectObject(hdc, darkPen);
+    MoveToEx(hdc, x + 1, y + 1, NULL);
+    LineTo(hdc, x + width - 2, y + 1);
+    LineTo(hdc, x + 1, y + height - 2);
+
+    DeleteObject(lightPen);
+    DeleteObject(darkPen);
+
+    // 填充按钮的背景
+    HBRUSH backgroundBrush = CreateSolidBrush(backgroundColor);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, backgroundBrush);
+    RECT buttonRect = { x + 2, y + 2, x + width - 2, y + height - 2 };
+    FillRect(hdc, &buttonRect, backgroundBrush);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(backgroundBrush);
+
+    // 设置文本颜色和背景模式
+    SetTextColor(hdc, RGB(0, 0, 0));
+    SetBkMode(hdc, TRANSPARENT);
+
+    // 绘制按钮上的文本，增加偏移量
+    RECT textRect = { x + 7, y + 7, x + width - 3, y + height - 3 };
+    DrawTextA(hdc, text, -1, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+}
 // 定义绘制单个窗口的函数
 void draw_button(HDC hdci, window_t* wnd)
 {
@@ -347,5 +421,42 @@ void draw_button(HDC hdci, window_t* wnd)
     y = wnd->y + (wnd->parent ? wnd->parent->y : 0);
     w = wnd->width;
     h = wnd->height;
-    DrawWin2000Button(hdci, x, y, w, h, wnd->title);
+    button_data_t* btn_data = (button_data_t*)wnd->specific_data;
+    if (btn_data->pressed) {
+        DrawWin2000PressedButton(hdci, x, y, w, h, wnd->title);
+    } else {
+        DrawWin2000Button(hdci, x, y, w, h, wnd->title);
+    }
+}
+
+// 绘制仿 Win2000 风格文本框的函数
+void DrawWin2000TextBox(HDC hdc, int x, int y, int width, int height, char* text)
+{
+    // 定义 Win2000 风格文本框的颜色
+    COLORREF borderColor = RGB(0, 0, 128);
+    COLORREF backgroundColor = RGB(255, 255, 255);
+    COLORREF textColor = RGB(0, 0, 0);
+
+    // 绘制文本框的外边框
+    HPEN borderPen = CreatePen(PS_SOLID, 1, borderColor);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    Rectangle(hdc, x, y, x + width, y + height);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+
+    // 填充文本框的背景
+    HBRUSH backgroundBrush = CreateSolidBrush(backgroundColor);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, backgroundBrush);
+    RECT textBoxRect = { x + 1, y + 1, x + width - 1, y + height - 1 };
+    FillRect(hdc, &textBoxRect, backgroundBrush);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(backgroundBrush);
+
+    // 设置文本颜色和背景模式
+    SetTextColor(hdc, textColor);
+    SetBkMode(hdc, TRANSPARENT);
+
+    // 绘制文本框内的文字
+    RECT textRect = { x + 5, y + 5, x + width - 5, y + height - 5 };
+    DrawTextA(hdc, text, -1, &textRect, DT_LEFT);
 }

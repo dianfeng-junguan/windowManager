@@ -45,7 +45,44 @@ typedef struct _window{
     struct _window* children;
     struct _window* parent;
     window_event_handler_t event_handlers[WNDEVENT_COUNT];
+    void (*constructor)(struct _window* wndptr);
+    void (*destructor)(struct _window* wndptr);
+    void* specific_data;
 } window_t;
+typedef struct _button_data{
+    int pressed;
+}button_data_t;
+//文本框特有属性
+typedef struct _editbox_data{
+    char *text;
+    long long text_buf_len;
+    int cursor_pos;
+    int select_start;
+    int select_end;
+}editbox_data_t;
+//滚动条特有属性
+typedef struct _scrollbar_data{
+    int range;
+    int value;
+    int small_step;
+    int large_step;
+    int thumb_size;
+    int thumb_pos;
+}scrollbar_data_t;
+//进度条特有属性
+typedef struct _progressbar_data{
+    int range;
+    int value;
+}progressbar_data_t;
+//滑块特有属性
+typedef struct _slider_data{
+    int range;
+    int value;
+}slider_data_t;
+//树控件特有属性
+typedef struct _treeview_data{
+    int selected_item;
+}treeview_data_t;
 typedef window_t* windowptr_t;
 typedef struct _window_event_listener{
     windowptr_t wndptr;
@@ -59,6 +96,8 @@ typedef struct _window_event_listener{
 #define WNDSTATE_VISIBLE (1<<1)
 #define WNDSTATE_FOCUSED (1<<2)
 #define WNDSTATE_DESTROYED (1<<3)
+#define WNDSTATE_RESIZABLE (1<<4)
+#define WNDSTATE_MOVABLE (1<<5)
 
 #define WNDTYPE_WINDOW 0
 #define WNDTYPE_BUTTON 1
@@ -113,6 +152,9 @@ int set_window_title(windowptr_t wndptr,char* title);
 int get_window_title(windowptr_t wndptr,char* title);
 int set_window_state(windowptr_t wndptr,int state);
 int get_window_state(windowptr_t wndptr,int* state);
+
+int set_window_text(windowptr_t wndptr,char* text);
+int get_window_text(windowptr_t wndptr,char* text,int max_len);
 
 int show_window(windowptr_t wndptr);
 int hide_window(windowptr_t wndptr);
@@ -186,3 +228,6 @@ void default_timer_event_handler(windowptr_t wndptr, int event_type, window_even
 
 void _wndpresethandler_closebutton_clicked(windowptr_t wndptr, int event_type, window_event_t* event);
 int init_wndman();
+
+void _editbox_ctor(windowptr_t wndptr);
+void _editbox_dtor(windowptr_t wndptr);

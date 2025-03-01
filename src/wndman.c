@@ -88,14 +88,65 @@ void default_mouse_move_event_handler(windowptr_t wndptr, int event_type, window
 }
 void default_mouse_down_event_handler(windowptr_t wndptr, int event_type, window_event_t* event)
 {
+    switch (wndptr->type) {
+    case WNDTYPE_BUTTON: {
+        button_data_t* data = (button_data_t*)wndptr->specific_data;
+        data->pressed = 1;
+        break;
+    }
+    }
 #ifdef DEBUG
     printf("default_mouse_down_event_handler: wndptr=%p, x=%d, y=%d, button=%d\n", wndptr, event->x, event->y, event->mouse_button);
+    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 #endif
 }
-void default_mouse_up_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
+void default_mouse_up_event_handler(windowptr_t wndptr, int event_type, window_event_t* event)
+{
+    switch (wndptr->type) {
+    case WNDTYPE_BUTTON: {
+        button_data_t* data = (button_data_t*)wndptr->specific_data;
+        data->pressed = 0;
+        break;
+    }
+    }
+#ifdef DEBUG
+    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+#endif
+}
 void default_mouse_double_click_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
 void default_mouse_wheel_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
-void default_key_down_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
+void default_key_down_event_handler(windowptr_t wndptr, int event_type, window_event_t* event)
+{
+    //如果wndptr是编辑框，则将按下的键码添加到文本缓冲区
+    if (wndptr->type == WNDTYPE_EDITBOX) {
+        editbox_data_t* data = (editbox_data_t*)wndptr->specific_data;
+        char c = event->key_code;
+        long long len = strlen(data->text);
+        if (c == '\b') { //退格键
+            if (len > 0) {
+                len--;
+                data->text[len] = '\0';
+            }
+        } else {
+            //回车键
+            //TODO 发送窗口事件
+            if (len == data->text_buf_len - 1) {
+                char* new_text = KMALLOC(data->text_buf_len * 2 > len + 1 ? data->text_buf_len * 2 : len + 1);
+                strcpy(new_text, data->text);
+                KFREE(data->text);
+                data->text = new_text;
+                data->text_buf_len *= 2;
+            }
+            data->text[len] = c;
+            len++;
+            data->text[len] = '\0';
+        }
+    }
+#ifdef DEBUG
+    printf("default_key_down_event_handler: wndptr=%p, key_code=%d\n", wndptr, event->key_code);
+    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+#endif
+}
 void default_key_up_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
 void default_key_press_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
 void default_window_resize_event_handler(windowptr_t wndptr, int event_type, window_event_t* event) { }
@@ -146,11 +197,11 @@ windowptr_t create_window(char* title, int wnd_type)
         show_window(btn);
 
         attach_window(btn, wndp);
-        set_window_event_handler(btn, WND_EVENT_MOUSE_CLICK, _wndpresethandler_closebutton_clicked);
         set_window_event_handler(btn, WND_EVENT_MOUSE_UP, _wndpresethandler_closebutton_clicked);
         return wndp;
+    } else {
+        return _create_control(title, wnd_type);
     }
-    return _create_control(title, wnd_type);
 }
 windowptr_t _create_control(char* title, int wnd_type)
 {
@@ -166,11 +217,30 @@ windowptr_t _create_control(char* title, int wnd_type)
     wndp->children = NULL;
     wndp->next_as_child = NULL;
     wndp->prev_as_child = NULL;
+    wndp->destructor = NULL;
+    wndp->specific_data = NULL;
     // 复制窗口标题
     strncpy(wndp->title, title, sizeof(wndp->title) - 1);
     wndp->title[sizeof(wndp->title) - 1] = '\0';
     memcpy(wndp->event_handlers, g_default_event_handlers, sizeof(g_default_event_handlers));
 
+    switch (wnd_type) {
+    case WNDTYPE_BUTTON: {
+        button_data_t* data = KMALLOC(sizeof(button_data_t));
+        data->pressed = 0;
+        wndp->specific_data = data;
+        break;
+    }
+    case WNDTYPE_EDITBOX: {
+        editbox_data_t* data = KMALLOC(sizeof(editbox_data_t));
+        data->text_buf_len = 1024;
+        data->text = KMALLOC(data->text_buf_len);
+        memset(data->text, 0, 1024);
+        wndp->destructor = _editbox_dtor;
+        wndp->specific_data = data;
+        break;
+    }
+    }
     return wndp;
 }
 
@@ -186,6 +256,13 @@ int destroy_window(windowptr_t wndptr)
     }
     wndptr->state |= WNDSTATE_DESTROYED;
     wndptr->state = 0;
+    if (wndptr->destructor) {
+        wndptr->destructor(wndptr);
+    }
+    if (wndptr->specific_data) {
+        KFREE(wndptr->specific_data);
+        wndptr->specific_data = NULL;
+    }
     if (wndptr->children) {
         window_t* p = wndptr->children;
         while (p) {
@@ -217,17 +294,19 @@ int attach_window(windowptr_t wndptr, windowptr_t parent_wndptr)
     if (!parent_wndptr->children) {
         parent_wndptr->children = wndptr;
     }
-    for (window_t* p = parent_wndptr->children; p; p = p->next_as_child) {
-        if (!p->next_as_child) {
-            p->next_as_child = wndptr;
-            wndptr->prev_as_child = p;
-            wndptr->next_as_child = NULL;
-            wndptr->parent = parent_wndptr;
-            return 0;
-        }
-    }
+    _wnd_list_add(&parent_wndptr->children, wndptr);
+    wndptr->parent = parent_wndptr;
+    // for (window_t* p = parent_wndptr->children; p; p = p->next_as_child) {
+    //     if (!p->next_as_child) {
+    //         p->next_as_child = wndptr;
+    //         wndptr->prev_as_child = p;
+    //         wndptr->next_as_child = NULL;
+    //         wndptr->parent = parent_wndptr;
+    //         return 0;
+    //     }
+    // }
 
-    return -1;
+    return 0;
 }
 
 /**
@@ -285,7 +364,13 @@ windowptr_t _get_collided_window(windowptr_t wnd, int x, int y)
 windowptr_t get_window_by_pos(int x, int y, int layer)
 {
     window_t* wnd = g_windows;
-    for (; wnd; wnd = wnd->next_as_child) {
+    if (!wnd) {
+        return NULL;
+    }
+    //先到结尾，结尾的窗口在最前面
+    for (; wnd->next_as_child; wnd = wnd->next_as_child) {
+    }
+    for (; wnd; wnd = wnd->prev_as_child) {
         windowptr_t collided = _get_collided_window(wnd, x, y);
         if (collided) {
             return collided;
@@ -510,6 +595,10 @@ void deal_events()
     while (event) {
         //执行handler
         window_t* wnd = event->sender;
+        if (!event->sender) {
+
+            goto next;
+        }
         if (wnd->event_handlers[event->event_type]) {
             wnd->event_handlers[event->event_type](event->sender, event->event_type, event);
         }
@@ -519,6 +608,7 @@ void deal_events()
                 listener->listener(event->sender, event->event_type, event);
             }
         }
+    next:;
         window_event_t* next = event->next;
         KFREE(event);
         event = next;
@@ -564,6 +654,16 @@ void _on_mouse_down(int x, int y, int button)
             .y = y,
         };
         send_window_event(wndptr, &event);
+
+        //调整窗口在g_windows中的位置，让获得焦点的窗口位于最前面
+        window_t* wnd = wndptr;
+        while (wnd->type != WNDTYPE_WINDOW && wnd->parent) {
+            wnd = wnd->parent;
+        }
+        _wnd_list_remove(&g_windows, wnd);
+        _wnd_list_add(&g_windows, wnd);
+
+        g_focused_wndptr = wndptr;
     }
 }
 void _on_mouse_up(int x, int y, int button)
@@ -625,17 +725,6 @@ void _on_mouse_click(windowptr_t wndptr, int x, int y, int button)
         .y = y,
     };
     send_window_event(wndptr, &clicked_event);
-    window_t* wnd = wndptr;
-    while (wnd->type != WNDTYPE_WINDOW && wnd->parent) {
-        wnd = wnd->parent;
-    }
-    //调整窗口在g_windows中的位置，让获得焦点的窗口位于最前面
-    _wnd_list_remove(&g_windows, wnd);
-    wnd->next_as_child = g_windows;
-    wnd->prev_as_child = NULL;
-    g_windows = wnd;
-
-    g_focused_wndptr = wndptr;
 }
 void _on_key_down(int key_code)
 {
@@ -672,6 +761,11 @@ void _on_key_press(int key_code)
 void _render_window(window_t* wndi)
 {
     window_t* wnd = wndi;
+    int x, y, w, h;
+    x = wnd->x + (wnd->parent ? wnd->parent->x : 0);
+    y = wnd->y + (wnd->parent ? wnd->parent->y : 0);
+    w = wnd->width;
+    h = wnd->height;
     if (wnd && wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
         && wnd->state & WNDSTATE_VISIBLE) {
         switch (wnd->type) {
@@ -683,6 +777,11 @@ void _render_window(window_t* wndi)
         case WNDTYPE_BUTTON: {
             extern void draw_button(HDC hdc, window_t * wnd);
             draw_button(hMemDC, wnd);
+            break;
+        }
+        case WNDTYPE_EDITBOX: {
+            extern void DrawWin2000TextBox(HDC hdc, int x, int y, int width, int height, char* text);
+            DrawWin2000TextBox(hMemDC, x, y, w, h, ((editbox_data_t*)wnd->specific_data)->text);
             break;
         }
         }
@@ -712,4 +811,38 @@ void _wndpresethandler_closebutton_clicked(windowptr_t wndptr, int event_type, w
         .sender = wndptr,
     };
     send_window_event(parent_wndp, &close_event);
+}
+
+int set_window_text(windowptr_t wndptr, char* text)
+{
+    if (wndptr->type == WNDTYPE_EDITBOX) {
+        editbox_data_t* data = (editbox_data_t*)wndptr->specific_data;
+        if (data->text_buf_len < strlen(text)) {
+            KFREE(data->text);
+            data->text = KMALLOC(strlen(text) + 1);
+            data->text_buf_len = strlen(text) + 1;
+        }
+        strcpy(data->text, text);
+    } else {
+        strncpy(wndptr->title, text, sizeof(wndptr->title));
+    }
+    return 0;
+}
+int get_window_text(windowptr_t wndptr, char* text, int max_len)
+{
+    if (wndptr->type == WNDTYPE_EDITBOX) {
+        editbox_data_t* data = (editbox_data_t*)wndptr->specific_data;
+        strncpy(text, data->text, max_len);
+    } else {
+        strncpy(text, wndptr->title, max_len);
+    }
+    return 0;
+}
+void _editbox_dtor(windowptr_t wndptr)
+{
+    editbox_data_t* data = (editbox_data_t*)wndptr->specific_data;
+    if (data->text) {
+        KFREE(data->text);
+        data->text = NULL;
+    }
 }

@@ -108,6 +108,13 @@ int create_window(char* title, int wnd_type)
             wndp->title[sizeof(wndp->title) - 1] = '\0';
             memcpy(wndp->event_handlers, g_default_event_handlers, sizeof(g_default_event_handlers));
             _add_to_layer_ordered(i, 0);
+            int btni = -1;
+            if (wnd_type == WNDTYPE_WINDOW && (btni = create_window("X", WNDTYPE_BUTTON)) < 0) {
+                destroy_window(i);
+                return -1;
+            }
+            resize_window(btni, 50, 50);
+            move_window(btni, wndp->width - 53, wndp->y + 3);
             return i;
         }
     }
@@ -609,12 +616,25 @@ void _render_windows()
     for (int i = 0; i < MAX_WINDOWS; i++) {
         window_t* wnd = g_wnd_layer_ordered[i];
         if (wnd && wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
-            && wnd->type == WNDTYPE_WINDOW && wnd->state & WNDSTATE_VISIBLE) {
+            && wnd->state & WNDSTATE_VISIBLE) {
+            switch (wnd->type) {
+            case WNDTYPE_WINDOW: {
 #ifdef DEBUG
-            // printf("render window %lld\n", wnd - g_windows);
-            extern void draw_window(HDC hdc, window_t * wnd);
-            draw_window(hdc, wnd);
+                // printf("render window %lld\n", wnd - g_windows);
+                extern void draw_window(HDC hdc, window_t * wnd);
+                draw_window(hdc, wnd);
 #endif
+                break;
+            }
+            case WNDTYPE_BUTTON: {
+#ifdef DEBUG
+                // printf("render window %lld\n", wnd - g_windows);
+                extern void draw_button(HDC hdc, window_t * wnd);
+                draw_button(hdc, wnd);
+#endif
+                break;
+            }
+            }
         }
     }
 }

@@ -9,7 +9,7 @@ HWND hWnd = NULL;
 // 时钟中断处理函数
 VOID CALLBACK TimerCallback(PVOID lpParam, BOOLEAN TimerOrWaitFired)
 {
-    _on_clock_int();
+    // _on_clock_int();
 }
 
 // 鼠标按下处理函数
@@ -121,7 +121,7 @@ int main()
 
     // 测试 create_window
     char title[] = "Test Window";
-    int wnd_type = WNDTYPE_WINDOW;
+    int wnd_type = WNDTYPE_BUTTON;
     int wnd_id = create_window(title, wnd_type);
     if (wnd_id < 0) {
         printf("Failed to create window\n");
@@ -179,6 +179,7 @@ int main()
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+        _on_clock_int();
     }
 
     // 测试 remove_window_event_listener
@@ -211,14 +212,29 @@ int main()
 
     return 0;
 }
+
+// Win2000 风格标题栏颜色
+const COLORREF TITLEBAR_COLOR = RGB(128, 128, 255);
+// Win2000 风格边框颜色
+const COLORREF BORDER_COLOR = RGB(0, 0, 128);
 // 定义绘制单个窗口的函数
 void draw_window(HDC hdci, window_t* wnd)
 {
     // 创建一个矩形来表示窗口的位置和大小
-    RECT rect, clientrect;
+    RECT rect, clientrect, windowRect;
     PAINTSTRUCT ps;
+    HDC hdcMem;
+    HBITMAP hBitmap;
     // 开始绘制
     hdc = BeginPaint(hWnd, &ps);
+
+    GetClientRect(hWnd, &clientrect);
+    GetWindowRect(hWnd, &windowRect);
+
+    // 创建内存设备上下文
+    hdcMem = CreateCompatibleDC(hdc);
+    hBitmap = CreateCompatibleBitmap(hdc, clientrect.right, clientrect.bottom);
+    SelectObject(hdcMem, hBitmap);
 
     // 定义要填充的矩形区域
     rect.left = wnd->x;
@@ -226,12 +242,36 @@ void draw_window(HDC hdci, window_t* wnd)
     rect.right = wnd->x + wnd->width;
     rect.bottom = wnd->y + wnd->height;
 
-    // 创建一个画刷，用于填充矩形
-    hBrush = CreateSolidBrush(RGB(255, 0, 0)); // 创建一个红色画刷
+    // 在内存设备上下文中绘制背景
+    FillRect(hdci, &clientrect, (HBRUSH)GetStockObject(WHITE_BRUSH));
 
-    // 使用FillRect函数填充矩形
-    FillRect(hdc, &rect, hBrush);
-    DrawText(hdc, wnd->title, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+    // 绘制 Win2000 风格边框
+    HPEN borderPen = CreatePen(PS_SOLID, 2, BORDER_COLOR);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdci, GetStockObject(NULL_BRUSH));
+    HPEN oldPen = (HPEN)SelectObject(hdci, borderPen);
+    Rectangle(hdci, rect.left, rect.top, rect.right, rect.bottom);
+    SelectObject(hdci, oldPen);
+    SelectObject(hdci, oldBrush);
+    DeleteObject(borderPen);
+
+    // 绘制 Win2000 风格标题栏
+    HBRUSH titleBarBrush = CreateSolidBrush(TITLEBAR_COLOR);
+    RECT titleBarRect = { rect.left, rect.top, rect.right, rect.top - 22 };
+    FillRect(hdci, &titleBarRect, titleBarBrush);
+    DeleteObject(titleBarBrush);
+
+    // 在内存设备上下文中绘制矩形
+    Rectangle(hdci, rect.left, rect.top, rect.right, rect.bottom);
+
+    // 创建一个画刷，用于填充矩形
+    hBrush = CreateSolidBrush(RGB(255, 0, 0));
+    DrawText(hdci, wnd->title, -1, &rect, DT_SINGLELINE | DT_CENTER);
+    // 将内存设备上下文的内容复制到屏幕设备上下文
+    // BitBlt(hdc, 0, 0, clientrect.right, clientrect.bottom, hdci, 0, 0, SRCCOPY);
+
+    // 清理资源
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
 
     // 删除画刷，释放资源
     DeleteObject(hBrush);
@@ -250,4 +290,62 @@ void draw_window(HDC hdci, window_t* wnd)
     // 绘制窗口标题
     // BitBlt(hdc, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hMemDC, 0, 0, SRCCOPY);
     BitBlt(hdc, clientrect.left, clientrect.top, clientrect.right - clientrect.left, clientrect.bottom - clientrect.top, hMemDC, 0, 0, SRCCOPY); */
+}
+
+// 绘制仿 Win2000 风格按钮的函数
+void DrawWin2000Button(HDC hdc, int x, int y, int width, int height, const char* text)
+{
+    // 定义 Win2000 风格按钮的颜色
+    COLORREF borderColor = RGB(0, 0, 128);
+    COLORREF lightBorderColor = RGB(255, 255, 255);
+    COLORREF darkBorderColor = RGB(0, 0, 0);
+    COLORREF backgroundColor = RGB(212, 208, 200);
+
+    // 绘制按钮的外边框
+    HPEN borderPen = CreatePen(PS_SOLID, 1, borderColor);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    Rectangle(hdc, x, y, x + width, y + height);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+
+    // 绘制按钮的内边框（高光和阴影）
+    HPEN lightPen = CreatePen(PS_SOLID, 1, lightBorderColor);
+    HPEN darkPen = CreatePen(PS_SOLID, 1, darkBorderColor);
+
+    // 高光部分
+    SelectObject(hdc, lightPen);
+    MoveToEx(hdc, x + 1, y + 1, NULL);
+    LineTo(hdc, x + width - 2, y + 1);
+    LineTo(hdc, x + 1, y + height - 2);
+
+    // 阴影部分
+    SelectObject(hdc, darkPen);
+    MoveToEx(hdc, x + width - 2, y + 1, NULL);
+    LineTo(hdc, x + width - 2, y + height - 2);
+    LineTo(hdc, x + 1, y + height - 2);
+
+    DeleteObject(lightPen);
+    DeleteObject(darkPen);
+
+    // 填充按钮的背景
+    HBRUSH backgroundBrush = CreateSolidBrush(backgroundColor);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, backgroundBrush);
+    RECT buttonRect = { x + 2, y + 2, x + width - 2, y + height - 2 };
+    FillRect(hdc, &buttonRect, backgroundBrush);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(backgroundBrush);
+
+    // 设置文本颜色和背景模式
+    SetTextColor(hdc, RGB(0, 0, 0));
+    SetBkMode(hdc, TRANSPARENT);
+
+    // 绘制按钮上的文本
+    RECT textRect = { x + 5, y + 5, x + width - 5, y + height - 5 };
+    DrawTextA(hdc, text, -1, &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+}
+
+// 定义绘制单个窗口的函数
+void draw_button(HDC hdci, window_t* wnd)
+{
+    DrawWin2000Button(hdci, wnd->x, wnd->y, wnd->width, wnd->height, wnd->title);
 }

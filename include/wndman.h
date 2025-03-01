@@ -1,6 +1,9 @@
 #pragma once
 
 #include "wndman.h"
+#define DEFAULT_WINDOW_WIDTH 640
+#define DEFAULT_WINDOW_HEIGHT 480
+#define DEFAULT_WINDOW_TITLE "Window"
 typedef struct _window_event{
     int x, y;
     int dx,dy;
@@ -143,6 +146,11 @@ int remove_window_event_listener(int wnd_id,int event_type,int listener_id);
 void deal_events();
 #define CHECK_VALID_WNDID(wnd_id) if(wnd_id<0 || wnd_id>=MAX_WINDOWS) return -1;
 
+/**
+    @brief 创建控件，内部函数
+*/
+int _create_control(char* title,int wnd_type);
+int _offset_window(int wnd_id, int dx, int dy);
 //对接外设中断的函数
 void _on_mouse_down(int x, int y, int button);
 void _on_mouse_up(int x, int y, int button);

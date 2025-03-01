@@ -5,6 +5,12 @@
 // 全局变量
 HANDLE hTimer = NULL;
 HWND hWnd = NULL;
+HDC hdc;
+
+// 创建一个画刷来填充窗口背景
+HBRUSH hBrush;
+HDC hMemDC;
+HBITMAP hBitmap;
 
 // 时钟中断处理函数
 VOID CALLBACK TimerCallback(PVOID lpParam, BOOLEAN TimerOrWaitFired)
@@ -42,6 +48,8 @@ LRESULT CALLBACK KeyPressHandler(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 // 窗口过程函数
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    PAINTSTRUCT ps;
+    RECT clientRect;
     switch (uMsg) {
     case WM_LBUTTONDOWN:
         return MouseDownHandler(hwnd, uMsg, wParam, lParam);
@@ -56,7 +64,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         PostQuitMessage(0);
         return 0;
     case WM_PAINT:
+        hdc = BeginPaint(hwnd, &ps);
+        GetClientRect(hwnd, &clientRect);
+
+        // 创建内存设备上下文
+        hMemDC = CreateCompatibleDC(hdc);
+        hBitmap = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
+        SelectObject(hMemDC, hBitmap);
+
         _render_windows();
+
+        // 将内存设备上下文的内容复制到窗口设备上下文
+        BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, hMemDC, 0, 0, SRCCOPY);
+
+        // 清理资源
+        DeleteObject(hBitmap);
+        DeleteDC(hMemDC);
+
+        EndPaint(hwnd, &ps);
         return 0;
     default:
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -67,12 +92,6 @@ void custom_event_handler(int wnd_id, int event_type, window_event_t* event)
 {
     printf("Custom event handler called for window %d, event type %d\n", wnd_id, event_type);
 }
-HDC hdc;
-
-// 创建一个画刷来填充窗口背景
-HBRUSH hBrush;
-HDC hMemDC;
-HBITMAP hBitmap;
 int main()
 {
     // 初始化 wndman
@@ -102,12 +121,14 @@ int main()
     // 显示窗口
     ShowWindow(hWnd, SW_SHOW);
     UpdateWindow(hWnd);
-    hdc = GetDC(GetDesktopWindow());
-    hBrush = CreateSolidBrush(RGB(0, 255, 255)); // 白色背景
-    // 创建内存设备上下文和兼容位图
-    hMemDC = CreateCompatibleDC(hdc);
-    hBitmap = CreateCompatibleBitmap(hdc, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-    SelectObject(hMemDC, hBitmap);
+    // hdc = GetDC(GetDesktopWindow());
+    // hBrush = CreateSolidBrush(RGB(0, 255, 255)); // 白色背景
+    // RECT clientrect;
+    // GetClientRect(hWnd, &clientrect);
+    // // 创建内存设备上下文和兼容位图
+    // hMemDC = CreateCompatibleDC(hdc);
+    // hBitmap = CreateCompatibleBitmap(hdc, clientrect.right, clientrect.bottom);
+    // SelectObject(hMemDC, hBitmap);
 
     // 创建定时器
     // CREATE_TIMER_QUERY timerQuery;
@@ -121,16 +142,22 @@ int main()
 
     // 测试 create_window
     char title[] = "Test Window";
-    int wnd_type = WNDTYPE_BUTTON;
+    char title2[] = "Test Window2";
+    int wnd_type = WNDTYPE_WINDOW;
     int wnd_id = create_window(title, wnd_type);
-    if (wnd_id < 0) {
+    int wnd_id2 = create_window(title2, WNDTYPE_BUTTON);
+    resize_window(wnd_id2, 100, 50);
+    move_window(wnd_id2, 100, 100);
+    attach_window(wnd_id2, wnd_id);
+    show_window(wnd_id2);
+    if (wnd_id < 0 || wnd_id2 < 0) {
         printf("Failed to create window\n");
         return -1;
     }
     printf("Window created with ID: %d\n", wnd_id);
 
     // 测试 move_window
-    if (move_window(wnd_id, 100, 100) != 0) {
+    if (move_window(wnd_id, 0, 0) != 0) {
         printf("Failed to move window\n");
     } else {
         printf("Window moved successfully\n");
@@ -174,6 +201,7 @@ int main()
         printf("Window event sent successfully\n");
     }
 
+    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
     // 消息循环
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -201,10 +229,10 @@ int main()
     } else {
         printf("Window destroyed successfully\n");
     }
-    DeleteObject(hBrush);
-    DeleteObject(hBitmap);
-    DeleteDC(hMemDC);
-    ReleaseDC(GetDesktopWindow(), hdc);
+    // DeleteObject(hBrush);
+    // DeleteObject(hBitmap);
+    // DeleteDC(hMemDC);
+    // ReleaseDC(GetDesktopWindow(), hdc);
     // 销毁定时器
     if (hTimer) {
         DeleteTimerQueueTimer(NULL, hTimer, NULL);
@@ -213,83 +241,50 @@ int main()
     return 0;
 }
 
-// Win2000 风格标题栏颜色
-const COLORREF TITLEBAR_COLOR = RGB(128, 128, 255);
-// Win2000 风格边框颜色
-const COLORREF BORDER_COLOR = RGB(0, 0, 128);
+// 绘制仿 Win2000 风格窗口的函数
+void DrawWin2000Window(HDC hdc, int x, int y, int width, int height, const char* title)
+{
+    // 定义 Win2000 风格窗口的颜色
+    COLORREF borderColor = RGB(0, 0, 128);
+    COLORREF titleBarColor = RGB(128, 128, 255);
+    COLORREF titleTextColor = RGB(255, 255, 255);
+    COLORREF windowBackgroundColor = RGB(255, 255, 255);
+
+    // 绘制窗口的外边框
+    HPEN borderPen = CreatePen(PS_SOLID, 2, borderColor);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    Rectangle(hdc, x, y, x + width, y + height);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+
+    // 绘制标题栏
+    HBRUSH titleBarBrush = CreateSolidBrush(titleBarColor);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, titleBarBrush);
+    RECT titleBarRect = { x, y, x + width, y + 22 };
+    FillRect(hdc, &titleBarRect, titleBarBrush);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(titleBarBrush);
+
+    // 设置标题文本颜色和背景模式
+    SetTextColor(hdc, titleTextColor);
+    SetBkMode(hdc, TRANSPARENT);
+
+    // 绘制标题栏上的文本
+    RECT titleTextRect = { x + 5, y + 5, x + width - 5, y + 22 };
+    DrawTextA(hdc, title, -1, &titleTextRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // 填充窗口的背景
+    HBRUSH windowBackgroundBrush = CreateSolidBrush(windowBackgroundColor);
+    oldBrush = (HBRUSH)SelectObject(hdc, windowBackgroundBrush);
+    RECT windowRect = { x + 2, y + 22, x + width - 2, y + height - 2 };
+    FillRect(hdc, &windowRect, windowBackgroundBrush);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(windowBackgroundBrush);
+}
 // 定义绘制单个窗口的函数
 void draw_window(HDC hdci, window_t* wnd)
 {
-    // 创建一个矩形来表示窗口的位置和大小
-    RECT rect, clientrect, windowRect;
-    PAINTSTRUCT ps;
-    HDC hdcMem;
-    HBITMAP hBitmap;
-    // 开始绘制
-    hdc = BeginPaint(hWnd, &ps);
-
-    GetClientRect(hWnd, &clientrect);
-    GetWindowRect(hWnd, &windowRect);
-
-    // 创建内存设备上下文
-    hdcMem = CreateCompatibleDC(hdc);
-    hBitmap = CreateCompatibleBitmap(hdc, clientrect.right, clientrect.bottom);
-    SelectObject(hdcMem, hBitmap);
-
-    // 定义要填充的矩形区域
-    rect.left = wnd->x;
-    rect.top = wnd->y;
-    rect.right = wnd->x + wnd->width;
-    rect.bottom = wnd->y + wnd->height;
-
-    // 在内存设备上下文中绘制背景
-    FillRect(hdci, &clientrect, (HBRUSH)GetStockObject(WHITE_BRUSH));
-
-    // 绘制 Win2000 风格边框
-    HPEN borderPen = CreatePen(PS_SOLID, 2, BORDER_COLOR);
-    HBRUSH oldBrush = (HBRUSH)SelectObject(hdci, GetStockObject(NULL_BRUSH));
-    HPEN oldPen = (HPEN)SelectObject(hdci, borderPen);
-    Rectangle(hdci, rect.left, rect.top, rect.right, rect.bottom);
-    SelectObject(hdci, oldPen);
-    SelectObject(hdci, oldBrush);
-    DeleteObject(borderPen);
-
-    // 绘制 Win2000 风格标题栏
-    HBRUSH titleBarBrush = CreateSolidBrush(TITLEBAR_COLOR);
-    RECT titleBarRect = { rect.left, rect.top, rect.right, rect.top - 22 };
-    FillRect(hdci, &titleBarRect, titleBarBrush);
-    DeleteObject(titleBarBrush);
-
-    // 在内存设备上下文中绘制矩形
-    Rectangle(hdci, rect.left, rect.top, rect.right, rect.bottom);
-
-    // 创建一个画刷，用于填充矩形
-    hBrush = CreateSolidBrush(RGB(255, 0, 0));
-    DrawText(hdci, wnd->title, -1, &rect, DT_SINGLELINE | DT_CENTER);
-    // 将内存设备上下文的内容复制到屏幕设备上下文
-    // BitBlt(hdc, 0, 0, clientrect.right, clientrect.bottom, hdci, 0, 0, SRCCOPY);
-
-    // 清理资源
-    DeleteObject(hBitmap);
-    DeleteDC(hdcMem);
-
-    // 删除画刷，释放资源
-    DeleteObject(hBrush);
-
-    // 结束绘制
-    EndPaint(hWnd, &ps);
-    /* 
-    GetClientRect(hWnd, &clientrect);
-    rect.left = clientrect.left + wnd->x;
-    rect.top = clientrect.top + wnd->y;
-    rect.right = clientrect.left + wnd->x + wnd->width;
-    rect.bottom = clientrect.top + wnd->y + wnd->height;
-    extern HBRUSH hBrush;
-    FillRect(hdci, &rect, hBrush);
-
-    // 绘制窗口标题
-    // BitBlt(hdc, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hMemDC, 0, 0, SRCCOPY);
-    BitBlt(hdc, clientrect.left, clientrect.top, clientrect.right - clientrect.left, clientrect.bottom - clientrect.top, hMemDC, 0, 0, SRCCOPY); */
+    DrawWin2000Window(hdci, wnd->x, wnd->y, wnd->width, wnd->height, wnd->title);
 }
 
 // 绘制仿 Win2000 风格按钮的函数

@@ -58,11 +58,8 @@ void default_key_press_event_handler(int wnd_id, int event_type, window_event_t*
 void default_window_resize_event_handler(int wnd_id, int event_type, window_event_t* event) { }
 void default_window_move_event_handler(int wnd_id, int event_type, window_event_t* event)
 {
-    window_t* wnd = g_windows + wnd_id;
-    wnd->x += event->dx;
-    wnd->y += event->dy;
+    _offset_window(wnd_id, event->dx, event->dy);
 #ifdef DEBUG
-    printf("default_window_move_event_handler: wnd_id=%d, x=%d, y=%d\n", wnd_id, wnd->x, wnd->y);
     RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 #endif
 }
@@ -86,8 +83,32 @@ int init_wndman()
 
     return 0;
 }
-
 int create_window(char* title, int wnd_type)
+{
+    if (wnd_type < 0 || wnd_type > WNDTYPE_TREEVIEW) {
+        return -1;
+    }
+    if (wnd_type == WNDTYPE_WINDOW) {
+        int btni = _create_control("X", WNDTYPE_BUTTON);
+        int wndi = _create_control(title, WNDTYPE_WINDOW);
+        window_t* wndp = g_windows + wndi;
+        wndp->width = DEFAULT_WINDOW_WIDTH;
+        wndp->height = DEFAULT_WINDOW_HEIGHT;
+        wndp->x = 100;
+        wndp->y = 100;
+        window_t* btnp = g_windows + btni;
+        btnp->width = 20;
+        btnp->height = 20;
+        btnp->x = wndp->x + wndp->width - 20 - 2;
+        btnp->y = wndp->y + 3;
+        show_window(btni);
+
+        attach_window(btni, wndi);
+        return wndi;
+    }
+    return _create_control(title, wnd_type);
+}
+int _create_control(char* title, int wnd_type)
 {
     for (int i = 0; i < MAX_WINDOWS; i++) {
         if (!(g_windows[i].state & WNDSTATE_PRESENT) && !(g_windows[i].state & WNDSTATE_DESTROYED)) {
@@ -108,13 +129,6 @@ int create_window(char* title, int wnd_type)
             wndp->title[sizeof(wndp->title) - 1] = '\0';
             memcpy(wndp->event_handlers, g_default_event_handlers, sizeof(g_default_event_handlers));
             _add_to_layer_ordered(i, 0);
-            int btni = -1;
-            if (wnd_type == WNDTYPE_WINDOW && (btni = create_window("X", WNDTYPE_BUTTON)) < 0) {
-                destroy_window(i);
-                return -1;
-            }
-            resize_window(btni, 50, 50);
-            move_window(btni, wndp->width - 53, wndp->y + 3);
             return i;
         }
     }
@@ -227,7 +241,19 @@ int get_window_by_pos(int x, int y, int layer)
     }
     return -1;
 }
-
+int _offset_window(int wnd_id, int dx, int dy)
+{
+    window_t* wnd = g_windows + wnd_id;
+    wnd->x += dx;
+    wnd->y += dy;
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+        if (g_windows[i].parent == wnd) {
+            g_windows[i].x += dx;
+            g_windows[i].y += dy;
+        }
+    }
+    return 0;
+}
 /**
     @brief 移动窗口
     @param wnd_id 要移动的窗口
@@ -239,8 +265,9 @@ int move_window(int wnd_id, int x, int y)
 {
     CHECK_VALID_WNDID(wnd_id);
     window_t* wnd = g_windows + wnd_id;
-    wnd->x = x;
-    wnd->y = y;
+    int dx = x - wnd->x;
+    int dy = y - wnd->y;
+    _offset_window(wnd_id, dx, dy);
     return 0;
 }
 
@@ -604,8 +631,8 @@ int _add_to_layer_ordered(int wnd_id, int layer)
     if (layer < 0 || layer >= MAX_WINDOWS) {
         return -1;
     }
-    for (int i = layer; i < MAX_WINDOWS - 1; i++) {
-        g_wnd_layer_ordered[i + 1] = g_wnd_layer_ordered[i];
+    for (int i = MAX_WINDOWS - 1; i > 0; i--) {
+        g_wnd_layer_ordered[i] = g_wnd_layer_ordered[i - 1];
     }
     g_wnd_layer_ordered[layer] = g_windows + wnd_id;
     return 0;
@@ -613,28 +640,24 @@ int _add_to_layer_ordered(int wnd_id, int layer)
 void _render_windows()
 {
 
+#ifdef DEBUG
     for (int i = 0; i < MAX_WINDOWS; i++) {
         window_t* wnd = g_wnd_layer_ordered[i];
         if (wnd && wnd->state & WNDSTATE_PRESENT && !(wnd->state & WNDSTATE_DESTROYED)
             && wnd->state & WNDSTATE_VISIBLE) {
             switch (wnd->type) {
             case WNDTYPE_WINDOW: {
-#ifdef DEBUG
-                // printf("render window %lld\n", wnd - g_windows);
                 extern void draw_window(HDC hdc, window_t * wnd);
-                draw_window(hdc, wnd);
-#endif
+                draw_window(hMemDC, wnd);
                 break;
             }
             case WNDTYPE_BUTTON: {
-#ifdef DEBUG
-                // printf("render window %lld\n", wnd - g_windows);
                 extern void draw_button(HDC hdc, window_t * wnd);
-                draw_button(hdc, wnd);
-#endif
+                draw_button(hMemDC, wnd);
                 break;
             }
             }
         }
     }
+#endif
 }
